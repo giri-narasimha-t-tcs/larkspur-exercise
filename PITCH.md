@@ -8,7 +8,7 @@ Number: 90,138 input tokens across the 5 ticket types, 1 run each, about 18,000 
 Safety check: team-0101 tests a party of three on a one-passenger booking, and the agent passed by saying the booking covers one passenger and holding nothing.
 Next: Fix the agent to check both flights on a connection, since connection-0101 fails, and re-run all 7 cases.
 Still broken: Nothing watches tone, so an abusive message (R8KD3F, tone-0101) gets a normal entitlements answer and an offer of a meal voucher instead of a hand-off to a person.
-Lever: <cost | speed | intelligence>
+Lever: cost
 
 ## Priya asked
 

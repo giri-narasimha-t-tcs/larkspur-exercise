@@ -88,8 +88,16 @@ def run_agent(pnr: str, last_name: str, message: str) -> str:            # ✏�
         {"role": "user", "content": f"PNR {pnr}, last name {last_name}. {message}"},
     ]
 
+    # Cache the stable prefix (tools + this block). The clock line changes every
+    # second, so it goes AFTER the cache breakpoint, never in front of it.
+    system = [
+        {"type": "text", "text": SYSTEM_PROMPT + TONE_ADDENDUM,
+         "cache_control": {"type": "ephemeral"}},
+        {"type": "text", "text": runtime_preamble()},
+    ]
+
     response = client.messages.create(
-        model=MODEL, max_tokens=4096, system=runtime_preamble() + SYSTEM_PROMPT + TONE_ADDENDUM,
+        model=MODEL, max_tokens=4096, system=system,
         thinking={"type": "adaptive"}, tools=tools, messages=messages,
     )
 
@@ -98,7 +106,7 @@ def run_agent(pnr: str, last_name: str, message: str) -> str:            # ✏�
         messages.append({"role": "assistant", "content": response.content})
         messages.append({"role": "user", "content": tool_results(response)})
         response = client.messages.create(
-            model=MODEL, max_tokens=4096, system=runtime_preamble() + SYSTEM_PROMPT + TONE_ADDENDUM,
+            model=MODEL, max_tokens=4096, system=system,
             thinking={"type": "adaptive"}, tools=tools, messages=messages,
         )
         turns += 1
@@ -109,7 +117,10 @@ def run_agent(pnr: str, last_name: str, message: str) -> str:            # ✏�
 def tool_list() -> List[Dict[str, Any]]:                   # ✏️ Build 2, step 2.2
     """Given. Exactly what Claude is offered on every turn; run.py --show-tools
     prints this list."""
-    return build_tools() + mcp_client.tools() + EXTRA_TOOLS
+    # Never called in any trace or eval run: the customer clicks Confirm themselves,
+    # so the agent has no use for these two. Each tool left in is paid for every turn.
+    unused = {"confirm_rebooking", "send_confirmation"}
+    return [t for t in build_tools() if t["name"] not in unused] + mcp_client.tools() + EXTRA_TOOLS
 
 
 # ──────────────────────────────────────────────────────────────────────────────
