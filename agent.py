@@ -19,49 +19,6 @@ MAX_TOOL_CALLS = 8  # Larkspur's own build capped the loop here; then a human ta
 TONE_ADDENDUM = ""                       # ✏️ Build 4, step 4.1, intelligence goal
 EXTRA_TOOLS: List[Dict[str, Any]] = [   # ✏️ Build 2, step 2.1: schemas for the tools you add
     {
-        "name": "next_available_day",
-        "description": (
-            "Find the first date a customer can actually fly a route again. Call it when "
-            "the customer asks about DATES: 'when is the first day I can fly?', 'how long "
-            "am I stuck?'. Do not use it to pick a specific flight; that is "
-            "search_alternatives. Needs origin and destination airport codes and the "
-            "date the customer was booked to travel, all of which come from "
-            "lookup_booking. Searches free seats on every Larkspur flight forward from "
-            "that date and returns the earliest date with an open seat as YYYY-MM-DD, or "
-            "None if there is no open seat in the schedule. Answers for one passenger "
-            "only. It holds and books nothing."
-        ),
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "origin": {"type": "string", "description": "Departure airport, 3-letter code, e.g. DEN."},
-                "dest": {"type": "string", "description": "Arrival airport, 3-letter code, e.g. BOI."},
-                "date": {"type": "string", "description": "The disrupted travel date, ISO format YYYY-MM-DD, e.g. 2025-05-08. The search starts here and looks forward only."},
-                "cabin": {"type": "string", "enum": ["Y", "J"], "description": "Y for main, J for first. Use the cabin the customer is ticketed in. Defaults to Y."},
-            },
-            "required": ["origin", "dest", "date"],
-        },
-    },
-    {
-        "name": "fare_rules",
-        "description": (
-            "Read the text of Larkspur's Handbook (Customer Commitment and fare rules). "
-            "Call it when a customer asks WHY: why no hotel, why no refund, what their "
-            "fare family includes, what the chat agent cannot do. Quote what it returns "
-            "instead of paraphrasing from memory. Takes one section, by number or by "
-            "words from its title. Returns that section's full text, or the list of "
-            "available sections if nothing matches. It is reference reading only: what "
-            "the customer is actually owed still comes from check_policy."
-        ),
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "section": {"type": "string", "description": "A section number ('6') or words from its title: 'fare families', 'when we delay', 'care while you wait', 'chat automation'."},
-            },
-            "required": ["section"],
-        },
-    },
-    {
         "name": 'seats_left',
         "description": (
             "Count the free seats on one flight and say whether the whole party fits. Call it for 'is there room on that flight for the three of us?'. Get party_size from the customer's own message or the booking passenger count, and ask when unsure; never assume one. Returns seats left in main (Y) and first (J) and fits true/false for the party. search_alternatives and next_available_day answer for one passenger, so use this to check a party."
@@ -75,31 +32,7 @@ EXTRA_TOOLS: List[Dict[str, Any]] = [   # ✏️ Build 2, step 2.1: schemas for 
 ]
 
 
-import re as _re
-from pathlib import Path as _Path
 from support import mock_backend as _be
-
-_DATA = _Path(__file__).resolve().parent / "data" / "americas"
-
-
-def _handbook_sections() -> List[str]:
-    text = (_DATA / "fare_rules_excerpt.md").read_text(encoding="utf-8")
-    return [("### " + p).strip() for p in _re.split(r"^### ", text, flags=_re.M)[1:]]
-
-
-def _fare_rules(section: str) -> str:
-    """Return the Handbook section whose number or title matches `section`."""
-    secs = _handbook_sections()
-    q = _re.sub(r"^section\s+", "", (section or "").strip().lower()).rstrip(".")
-    for s in secs:
-        if q and s[4:].lower().startswith(q + "."):
-            return s
-    for s in secs:
-        if q and q in s.split("\n", 1)[0].lower():
-            return s
-    return "No section matches %r. Available: %s" % (
-        section, "; ".join(s.split("\n", 1)[0][4:] for s in secs))
-
 
 def _seats_left(flight_no: str, date: str, party_size: int = 1, cabin: str = "Y") -> Dict[str, Any]:
     for f in _be.load_flights():
@@ -112,8 +45,6 @@ def _seats_left(flight_no: str, date: str, party_size: int = 1, cabin: str = "Y"
 
 
 LOCAL_TOOLS: Dict[str, Any] = {          # ✏️ Build 2, step 2.1: the functions behind them
-    "next_available_day": next_available_day,
-    "fare_rules": _fare_rules,
     "seats_left": _seats_left,
 }
 
@@ -178,7 +109,7 @@ def run_agent(pnr: str, last_name: str, message: str) -> str:            # ✏�
 def tool_list() -> List[Dict[str, Any]]:                   # ✏️ Build 2, step 2.2
     """Given. Exactly what Claude is offered on every turn; run.py --show-tools
     prints this list."""
-    return build_tools() + EXTRA_TOOLS
+    return build_tools() + mcp_client.tools() + EXTRA_TOOLS
 
 
 # ──────────────────────────────────────────────────────────────────────────────
